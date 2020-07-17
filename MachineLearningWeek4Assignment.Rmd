@@ -1,0 +1,135 @@
+---
+title: "MachineLearningAssignment"
+author: "Kunal Sharma"
+date: "17/07/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Overview
+
+This is a document intending to show the model build process for predicting the manner in which people do exercise. This report describes how I built my model, how I used cross-validation and why I made the choices I did.
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, my goal was to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways and this forms the data set on which the predictive model is buily.
+
+Finally I use my chosen model to predict 20 different test cases for how individuals carried out their activity.
+
+## Loading data set and packages etc.
+
+```{r packages, results="hide", echo=TRUE}
+
+getwd()
+dir()
+setwd("~/R")
+
+library(caret)
+library(e1071)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+
+```
+
+
+```{r load, results="hide",echo=TRUE}
+
+url_training_data <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+url_testing_data <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+training_data<- read.csv(url(url_training_data))
+testing_data<- read.csv(url(url_testing_data))
+
+head(training_data)
+names(training_data)
+
+```
+
+
+```{r dimensions, echo=TRUE}
+
+dim(training_data)
+dim(testing_data)
+
+```
+
+## Condensation of variables
+
+In order to help build the models with relevant variables only, I condensed the variables in the training data set by removing those columns with low variance of values, removing columns with high "NA" proportions, and also removing the first few columns which held non-numric values.
+
+```{r condense, echo=TRUE}
+
+training_data_condensed <- training_data[,8:dim(training_data)[2]]
+
+columns_high_na <- sapply(training_data_condensed, function(x) mean(is.na(x))) > 0.90
+training_data_condensed <- training_data_condensed[,columns_high_na == FALSE]
+
+dim(training_data_condensed)
+
+variables_low_variance <- nearZeroVar(training_data_condensed, saveMetrics=TRUE)
+summary(variables_low_variance$nzv)
+training_data_condensed <- training_data_condensed[,c(variables_low_variance$nzv==FALSE)]
+
+dim(training_data_condensed)
+
+```
+
+
+## Split the training data set
+
+In order to be able to test models as I built, I needed to construct my own training/testing data split and I did so using the following code to split on the outcome variable.
+
+```{r split, echo=TRUE}
+
+set.seed(123)
+trainIndex = createDataPartition(y=training_data_condensed$classe, p = 0.70, list=FALSE)
+training_train <- training_data_condensed[trainIndex,]
+training_test <- training_data_condensed[-trainIndex,]
+
+dim(training_train)
+dim(training_test)
+
+```
+
+
+## Model type 1 - tree
+
+```{r tree, echo=TRUE}
+
+
+tree_model <- train(classe ~ ., data = training_data_condensed, method="rpart")
+tree_predict <- predict(tree_model, training_test)
+confusionMatrix(tree_predict, training_test$classe)
+
+
+```
+
+
+
+## Model type 2 - tree extension to a random forest
+
+```{r forest, echo=TRUE}
+
+forest_model_10 <- train(classe ~ ., data = training_data_condensed, method = "rf", ntree = 10)
+forest_predict_10 <- predict(forest_model_10, training_test)
+confusionMatrix(forest_predict_10, training_test$classe)
+
+```
+
+
+
+## Final model - random forest
+
+```{r final forest, echo=TRUE}
+
+testing_data <- testing_data[,8:dim(training_data)[2]]
+testing_data <- testing_data[,columns_high_na == FALSE]
+testing_data <- testing_data[,c(variables_low_variance$nzv==FALSE)]
+
+dim(testing_data)
+
+forest_predict_10_assignment <- predict(forest_model_10, testing_data[,-53])
+forest_predict_10_assignment
+
+```
